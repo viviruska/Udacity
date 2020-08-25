@@ -21,11 +21,10 @@ moment = Moment(app)
 app.config.from_object('config')
 db = SQLAlchemy(app)
 
-# TODO: connect to a local postgresql database
-
 #----------------------------------------------------------------------------#
 # Models.
 #----------------------------------------------------------------------------#
+
 
 class Venue(db.Model):
     __tablename__ = 'Venue'
@@ -38,6 +37,9 @@ class Venue(db.Model):
     phone = db.Column(db.String(120))
     image_link = db.Column(db.String(500))
     facebook_link = db.Column(db.String(120))
+
+    def __repr__(self):
+        return f'<Venue ID: {self.id}, name: {self.name}>'
 
     # TODO: implement any missing fields, as a database migration using Flask-Migrate
 
@@ -67,7 +69,7 @@ def format_datetime(value, format='medium'):
       format="EEEE MMMM, d, y 'at' h:mma"
   elif format == 'medium':
       format="EE MM, dd, y h:mma"
-  return babel.dates.format_datetime(date, format)
+  return babel.dates.format_datetime(date, format, locale='en_US')
 
 app.jinja_env.filters['datetime'] = format_datetime
 
@@ -110,6 +112,7 @@ def venues():
   }]
   return render_template('pages/venues.html', areas=data);
 
+
 @app.route('/venues/search', methods=['POST'])
 def search_venues():
   # TODO: implement search on artists with partial string search. Ensure it is case-insensitive.
@@ -124,6 +127,7 @@ def search_venues():
     }]
   }
   return render_template('pages/search_venues.html', results=response, search_term=request.form.get('search_term', ''))
+
 
 @app.route('/venues/<int:venue_id>')
 def show_venue(venue_id):
