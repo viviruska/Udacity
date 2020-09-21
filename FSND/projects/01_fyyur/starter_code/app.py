@@ -5,7 +5,11 @@
 import json
 import dateutil.parser
 import babel
-from flask import Flask, render_template, request, Response, flash, redirect, url_for
+import sys
+from datetime import datetime, timezone
+from dateutil.tz import tzlocal
+from flask import Flask, render_template, request, Response, flash, redirect, url_for, jsonify
+from flask_migrate import Migrate
 from flask_moment import Moment
 from flask_sqlalchemy import SQLAlchemy
 import logging
@@ -21,6 +25,8 @@ moment = Moment(app)
 app.config.from_object('config')
 db = SQLAlchemy(app)
 
+migrate = Migrate(app, db)
+
 #----------------------------------------------------------------------------#
 # Models.
 #----------------------------------------------------------------------------#
@@ -30,34 +36,75 @@ class Venue(db.Model):
     __tablename__ = 'Venue'
 
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String)
-    city = db.Column(db.String(120))
-    state = db.Column(db.String(120))
-    address = db.Column(db.String(120))
+    name = db.Column(db.String, nullable=False)
+    city = db.Column(db.String(120), nullable=False)
+    state = db.Column(db.String(120), nullable=False)
+    address = db.Column(db.String(120), nullable=False)
     phone = db.Column(db.String(120))
     image_link = db.Column(db.String(500))
     facebook_link = db.Column(db.String(120))
+    # ---- new ------------------------------------------
+    genres = db.Column(db.ARRAY(db.String), nullable=False)
+    website = db.Column(db.String(120))
+    seeking_talent = db.Column(db.Boolean, default=False)
+    seeking_description = db.Column(db.String(500))
+
+    # provide and configure a mapped relationship between Venue and Show model
+    shows = db.relationship(
+      'Show', 
+      backref='venue', 
+      lazy='joined',          # load all needed joined data objects, all at once
+      collection_class=list,  # the collection of children to be set equal to the data type list 
+      cascade='all, delete-orphan'
+    )
 
     def __repr__(self):
         return f'<Venue ID: {self.id}, name: {self.name}>'
 
-    # TODO: implement any missing fields, as a database migration using Flask-Migrate
 
 class Artist(db.Model):
     __tablename__ = 'Artist'
 
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String)
-    city = db.Column(db.String(120))
-    state = db.Column(db.String(120))
+    name = db.Column(db.String, nullable=False)
+    city = db.Column(db.String(120), nullable=False)
+    state = db.Column(db.String(120), nullable=False)
     phone = db.Column(db.String(120))
-    genres = db.Column(db.String(120))
     image_link = db.Column(db.String(500))
+    genres = db.Column(db.ARRAY(db.String), nullable=False)
     facebook_link = db.Column(db.String(120))
+    website = db.Column(db.String(120))
+    seeking_venue = db.Column(db.Boolean, default=False)
+    seeking_description = db.Column(db.String(500))
 
-    # TODO: implement any missing fields, as a database migration using Flask-Migrate
+    # provide and configure a mapped relationship between Venue and Show model
+    shows = db.relationship(
+      'Show', 
+      backref='artist', 
+      lazy='joined',          # load all needed joined data objects, all at once
+      collection_class=list,  # the collection of children to be set equal to the data type list 
+      cascade='all, delete-orphan'
+    )
+
+    def __repr__(self):
+        return f'<Artist ID: {self.id}, name: {self.name}>'
 
 # TODO Implement Show and Artist models, and complete all model relationships and properties, as a database migration.
+class Show(db.Model):
+    __tablename__ = 'Show'
+
+    id = db.Column(db.Integer, primary_key=True)
+    # a foreign key is stored on what is known as the child table, Show in this case
+    # which retrieves the primary key in the parent table (Venue)
+    venue_id = db.Column(db.Integer, db.ForeignKey('Venue.id'), nullable=False)
+    # same with Artist table
+    artist_id = db.Column(db.Integer, db.ForeignKey('Artist.id'), nullable=False)
+    start_time = db.Column(db.DateTime, default=datetime.today(), nullable=False)
+
+# SELECT make, model, year FROM vehicles
+#     JOIN drivers
+#     ON vehicles.driver_id = drivers.id
+#     WHERE drivers.name = 'Sarah';
 
 #----------------------------------------------------------------------------#
 # Filters.
@@ -223,6 +270,23 @@ def create_venue_form():
 
 @app.route('/venues/create', methods=['POST'])
 def create_venue_submission():
+  # error = False
+  # body = {}
+
+  # try:
+  #   db.session.add()
+  #   db.session.commit()
+  #   body['test'] = 'test'
+  # except:
+  #   error = True
+  #   db.session.rollback()
+  #   print(sys.exc_info)
+  # finally:
+  #   db.session.close()
+  # if not error:
+  #   return jsonify(body)
+
+
   # TODO: insert form data as a new Venue record in the db, instead
   # TODO: modify data to be the data object returned from db insertion
 
