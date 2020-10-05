@@ -8,7 +8,11 @@ import babel
 import sys
 from datetime import datetime, timezone
 from dateutil.tz import tzlocal
-from flask import Flask, render_template, request, Response, flash, redirect, url_for, jsonify
+from flask import (
+  Flask, render_template, request, Response, 
+  flash, redirect, url_for, jsonify, 
+  abort
+)
 from flask_migrate import Migrate
 from flask_moment import Moment
 from flask_sqlalchemy import SQLAlchemy
@@ -32,13 +36,25 @@ migrate = Migrate(app, db)
 #----------------------------------------------------------------------------#
 
 
+class Area(db.Model):
+    __tablename__ = 'Area'
+
+    id = db.Column(db.Integer, primary_key=True)
+    city = db.Column(db.String(120), nullable=False)
+    state = db.Column(db.String(120), nullable=False)
+    venues = db.relationship(
+      'Venue',
+      backref='area',
+      lazy='joined',
+      collection_class=list,
+      cascade='all, delete-orphan'
+    )
+
 class Venue(db.Model):
     __tablename__ = 'Venue'
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String, nullable=False)
-    city = db.Column(db.String(120), nullable=False)
-    state = db.Column(db.String(120), nullable=False)
     address = db.Column(db.String(120), nullable=False)
     phone = db.Column(db.String(120))
     image_link = db.Column(db.String(500))
@@ -48,6 +64,7 @@ class Venue(db.Model):
     website = db.Column(db.String(120))
     seeking_talent = db.Column(db.Boolean, default=False)
     seeking_description = db.Column(db.String(500))
+    area_id = db.Column(db.Integer, db.ForeignKey('Area.id'), nullable=False)
 
     # provide and configure a mapped relationship between Venue and Show model
     shows = db.relationship(
@@ -89,7 +106,6 @@ class Artist(db.Model):
     def __repr__(self):
         return f'<Artist ID: {self.id}, name: {self.name}>'
 
-# TODO Implement Show and Artist models, and complete all model relationships and properties, as a database migration.
 class Show(db.Model):
     __tablename__ = 'Show'
 
@@ -134,30 +150,48 @@ def index():
 
 @app.route('/venues')
 def venues():
-  # TODO: replace with real venues data.
-  #       num_shows should be aggregated based on number of upcoming shows per venue.
-  data=[{
-    "city": "San Francisco",
-    "state": "CA",
-    "venues": [{
-      "id": 1,
-      "name": "The Musical Hop",
-      "num_upcoming_shows": 0,
-    }, {
-      "id": 3,
-      "name": "Park Square Live Music & Coffee",
-      "num_upcoming_shows": 1,
-    }]
-  }, {
-    "city": "New York",
-    "state": "NY",
-    "venues": [{
-      "id": 2,
-      "name": "The Dueling Pianos Bar",
-      "num_upcoming_shows": 0,
-    }]
-  }]
-  return render_template('pages/venues.html', areas=data);
+  """
+  num_upcoming_shows: int, aggregated based on number of upcoming shows per venue
+
+  example data coming from database:
+  {
+    '_sa_instance_state': <sqlalchemy.orm.state.InstanceState object at 0x106dcc3a0>, 
+    'state': 'CA', 
+    'city': 'San Fransisco', 
+    'id': 1, 
+    'venues': [
+      {
+        '_sa_instance_state': <sqlalchemy.orm.state.InstanceState object at 0x10fe90160>, 
+        'seeking_description': 'We are on the lookout for a local artist to play every two weeks. Please call us.', 
+        'website': 'https://www.themusicalhop.com', 
+        'genres': ['Jazz', 'Reggae', 'Swing', 'Classical', 'Folk'], 
+        'image_link': 'https://images.unsplash.com/photo-1543900694-133f37abaaa5?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=400&q=60', 
+        'address': '1015 Folsom Street', 
+        'id': 1, 
+        'area_id': 1, 
+        'seeking_talent': True, 
+        'facebook_link': 'https://www.facebook.com/TheMusicalHop', 
+        'phone': '123-123-1234', 
+        'name': 'The Musical Hop', 
+        'shows': [<Show 6>],
+        'num_upcoming_shows': 1
+      }
+    ]
+  }
+  """
+  areas = Area.query.all()
+
+  if len(areas) > 0:
+    for area in areas:
+      # print(a.__dict__['venues'][0].__dict__)
+
+      # add num_upcoming_shows as per requirement
+      venues = area.venues
+      if venues:
+        for venue in venues:
+          venue.num_upcoming_shows = len(venue.shows)
+
+  return render_template('pages/venues.html', areas=areas)
 
 
 @app.route('/venues/search', methods=['POST'])
@@ -548,12 +582,43 @@ def create_show_submission():
   # called to create new shows in the db, upon submitting new show listing form
   # TODO: insert form data as a new Show record in the db, instead
 
-  # on successful db insert, flash success
-  flash('Show was successfully listed!')
-  # TODO: on unsuccessful db insert, flash an error instead.
-  # e.g., flash('An error occurred. Show could not be listed.')
-  # see: http://flask.pocoo.org/docs/1.0/patterns/flashing/
-  return render_template('pages/home.html')
+  error = False
+  body = {}
+
+  try:
+    artist_id = request.form.get('artist_id','')
+    venue_id = request.form.get('venue_id', '')
+    start_time = request.form.get('start_time', '')  # e.g.: '2020-09-28 23:43:32'
+
+    from datetime import datetime
+    start_time_object = datetime.strptime(start_time, '%Y-%m-%d %H:%M:%S')
+
+    show = Show(
+      venue_id=int(venue_id), 
+      artist_id=int(artist_id), 
+      start_time=start_time_object
+    )
+    db.session.add(show)
+    db.session.commit()
+
+    body['start_time'] = start_time_object
+    # on successful db insert, flash success
+    flash('Show was successfully listed!')
+  except:
+    error = True
+    db.session.rollback()
+
+    # on unsuccessful db insert, flash an error instead.
+    # e.g., flash('An error occurred. Show could not be listed.')
+    # see: http://flask.pocoo.org/docs/1.0/patterns/flashing/
+    flash('An error occurred. Show could not be listed.') # or flash(sys.exc_info())
+  finally:
+    db.session.close()
+  if error:
+    abort (400)
+  else:
+    # return jsonify(body)
+    return render_template('pages/home.html')
 
 @app.errorhandler(404)
 def not_found_error(error):
@@ -585,6 +650,6 @@ if __name__ == '__main__':
 # Or specify port manually:
 '''
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get('PORT', 5001))
     app.run(host='0.0.0.0', port=port)
 '''
