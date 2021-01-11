@@ -2,5 +2,5 @@
 
 ## Nanodegrees
 
-- Full Stack Web Developer
+- :dizzy: Full Stack Web Developer
 - React
