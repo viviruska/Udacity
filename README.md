@@ -3,4 +3,4 @@
 ## Nanodegrees
 
 - :dizzy: Full Stack Web Developer
-- React
+- :dizzy: React
